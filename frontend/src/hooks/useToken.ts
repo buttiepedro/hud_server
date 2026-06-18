@@ -3,7 +3,9 @@ import { useState, useCallback } from 'react'
 const LS_KEY = 'hud_token'
 
 function getStoredToken(): string {
-  return import.meta.env.VITE_HUD_TOKEN || localStorage.getItem(LS_KEY) || ''
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const envToken = (import.meta as any).env?.VITE_HUD_TOKEN as string | undefined
+  return envToken || localStorage.getItem(LS_KEY) || ''
 }
 
 export function useToken() {
