@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { NodeModel, DockerHost, LXCModel, VMModel } from '../../types'
 import { StatusDot } from './StatusDot'
-import { ResourceBar } from './ResourceBar'
 import { CollectorBadge } from '../layout/CollectorBadge'
 import { useSnapshotStore } from '../../store/snapshotStore'
 
