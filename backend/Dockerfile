@@ -5,7 +5,11 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     openssh-client \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /root/.ssh \
+    && printf "Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n" > /root/.ssh/config \
+    && chmod 700 /root/.ssh \
+    && chmod 600 /root/.ssh/config
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
