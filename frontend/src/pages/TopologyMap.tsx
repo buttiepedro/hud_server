@@ -243,21 +243,23 @@ function buildGraph(snap: DashboardSnapshot): { nodes: Node[]; edges: Edge[] } {
   // ── Docker containers ──────────────────────────────────────────────────────
 
   let traefikNodeId: string | null = null
+  const traefikRoutedIds: string[] = []  // containers with traefik.enable=true
 
   for (const gc of guestCols) {
     const host = findHost(gc.guest)
     if (!host || !host.available || host.containers.length === 0) continue
 
     const parentId = `guest-${gc.guest.vmid}`
-    // Spread containers evenly across the column, centered
     const totalContW = host.containers.length * STEP - COL_GAP
     const contStartX = gc.colX + gc.colW / 2 - totalContW / 2
 
     host.containers.forEach((c, ci) => {
       const cId = `docker-${host.host_id}-${c.id}`
+
       if (!traefikNodeId && (c.name === 'traefik' || c.image.startsWith('traefik'))) {
         traefikNodeId = cId
       }
+
       nodes.push({
         id: cId,
         type: 'containerNode',
@@ -271,9 +273,14 @@ function buildGraph(snap: DashboardSnapshot): { nodes: Node[]; edges: Edge[] } {
         type: 'smoothstep',
         ...edgeStyle('#22c55e', true),
       })
+
+      // Collect containers managed by Traefik for later edge drawing
+      if (c.labels?.['traefik.enable'] === 'true') {
+        traefikRoutedIds.push(cId)
+      }
     })
 
-    // Same-network edges between containers
+    // Same Docker-network edges between containers
     const netMap = new Map<string, string[]>()
     for (const c of host.containers) {
       for (const net of c.networks) {
@@ -294,6 +301,21 @@ function buildGraph(snap: DashboardSnapshot): { nodes: Node[]; edges: Edge[] } {
           ...edgeStyle('#0ea5e9', true),
         })
       }
+    }
+  }
+
+  // Traefik → routed containers
+  if (traefikNodeId) {
+    for (const targetId of traefikRoutedIds) {
+      if (targetId === traefikNodeId) continue
+      edges.push({
+        id: `e-traefik-${targetId}`,
+        source: traefikNodeId,
+        target: targetId,
+        label: 'route',
+        type: 'smoothstep',
+        ...edgeStyle('#a855f7', true),
+      })
     }
   }
 
@@ -328,12 +350,14 @@ function buildGraph(snap: DashboardSnapshot): { nodes: Node[]; edges: Edge[] } {
     })
   })
 
+  // CF Tunnel → Traefik container
   if (traefikNodeId && cfTunnels.length > 0) {
     edges.push({
       id: 'e-cf-traefik',
       source: `cf-${cfTunnels[0].id}`,
       target: traefikNodeId,
-      label: 'routes',
+      label: 'ingress',
+      type: 'smoothstep',
       ...edgeStyle('#f97316', false, true),
     })
   }
@@ -352,6 +376,7 @@ function Legend() {
     { color: '#f97316', label: 'Cloudflare Tunnel' },
     { color: '#1d4ed8', label: 'Bridge (vmbr0)' },
     { color: '#0ea5e9', label: 'Docker network', dashed: true },
+    { color: '#a855f7', label: 'Traefik route', dashed: true },
   ]
   return (
     <div className="absolute bottom-4 left-4 z-10 bg-slate-900/90 border border-slate-700/60 rounded-lg px-3 py-2.5 shadow-xl">
