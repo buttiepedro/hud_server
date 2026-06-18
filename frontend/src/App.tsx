@@ -5,6 +5,7 @@ import { TokenGate } from './components/layout/TokenGate'
 import { Dashboard } from './pages/Dashboard'
 import { Containers } from './pages/Containers'
 import { Connections } from './pages/Connections'
+import { TopologyMap } from './pages/TopologyMap'
 import { useSSE } from './hooks/useSSE'
 import { useToken } from './hooks/useToken'
 
@@ -21,6 +22,7 @@ function HUD({ token }: { token: string }) {
             <Route path="/" element={<Dashboard />} />
             <Route path="/containers" element={<Containers />} />
             <Route path="/connections" element={<Connections />} />
+            <Route path="/topology" element={<TopologyMap />} />
           </Routes>
         </main>
       </div>
