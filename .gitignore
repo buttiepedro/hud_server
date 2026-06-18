@@ -1,0 +1,27 @@
+# Environment
+.env
+.env.local
+
+# Certs and keys
+certs/
+*.pem
+*.key
+*.crt
+id_ed25519
+id_rsa
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Docker
+*.log

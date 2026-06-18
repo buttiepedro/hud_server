@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0a0e1a;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1e3a5f;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #00aaff44;
+  }
+}
+
+@layer components {
+  .hud-card {
+    @apply bg-hud-card border border-hud-border rounded-lg p-4;
+  }
+
+  .hud-badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium;
+  }
+
+  .status-dot {
+    @apply inline-block w-2 h-2 rounded-full flex-shrink-0;
+  }
+
+  .resource-bar-bg {
+    @apply w-full h-1.5 bg-hud-border rounded-full overflow-hidden;
+  }
+
+  .resource-bar-fill {
+    @apply h-full rounded-full transition-all duration-500;
+  }
+}
