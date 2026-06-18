@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import ReactFlow, {
   type Node,
   type Edge,
@@ -114,9 +114,9 @@ const NODE_TYPES = {
 
 // ── Layout constants ───────────────────────────────────────────────────────────
 
-const COL_W = 180
-const COL_GAP = 55
-const STEP = COL_W + COL_GAP
+const NODE_W = 180   // node card width
+const COL_GAP = 60   // gap between sibling columns
+const STEP = NODE_W + COL_GAP
 
 // ── Graph builder ──────────────────────────────────────────────────────────────
 
@@ -135,85 +135,91 @@ function edgeStyle(color: string, dashed = false, animated = false): Partial<Edg
   }
 }
 
+/**
+ * Layout algorithm:
+ * Each guest column is wide enough to fit all its Docker containers side-by-side.
+ * Guest nodes are centered within their column.
+ * Proxmox node is centered over the span of its guests.
+ * CF Tunnel panel sits to the right.
+ */
 function buildGraph(snap: DashboardSnapshot): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = []
   const edges: Edge[] = []
 
   type GuestEntry = { guest: LXCModel | VMModel; guestType: 'lxc' | 'vm'; nodeName: string }
+
+  // Build Docker host lookup
+  const hostByVmid = new Map<number, DockerHost>()
+  for (const h of snap.docker_hosts.data) {
+    if (h.available && h.proxmox_vmid != null) {
+      hostByVmid.set(h.proxmox_vmid, h)
+    }
+  }
+
+  // Collect all guests in order
   const allGuests: GuestEntry[] = []
   for (const n of snap.nodes.data) {
     for (const l of n.lxc) allGuests.push({ guest: l, guestType: 'lxc', nodeName: n.node })
     for (const v of n.vms) allGuests.push({ guest: v, guestType: 'vm', nodeName: n.node })
   }
 
-  const guestCount = Math.max(allGuests.length, 1)
-  const totalGuestW = guestCount * STEP - COL_GAP
-  const proxX = totalGuestW / 2 - COL_W / 2
+  // Assign each guest a column: wide enough to not overlap its containers
+  type GuestCol = GuestEntry & { colX: number; colW: number; containerCount: number }
+  const guestCols: GuestCol[] = []
+  let curX = 0
 
-  // Internet (top-right)
-  const cfAreaX = totalGuestW + 180
-  nodes.push({
-    id: 'internet',
-    type: 'internetNode',
-    position: { x: cfAreaX + 20, y: 20 },
-    data: {},
-    draggable: true,
-  })
+  for (const entry of allGuests) {
+    const host = hostByVmid.get(entry.guest.vmid)
+    const n = host ? host.containers.length : 0
+    // Column must accommodate n containers side-by-side (or at least one node width)
+    const colW = n > 0 ? Math.max(NODE_W, n * STEP - COL_GAP) : NODE_W
+    guestCols.push({ ...entry, colX: curX, colW, containerCount: n })
+    curX += colW + COL_GAP
+  }
 
-  // Cloudflare tunnels
-  const cfTunnels: CloudflareTunnel[] = snap.cloudflare.available
-    ? (snap.cloudflare.data?.tunnels ?? [])
-    : []
+  const totalGuestW = curX > COL_GAP ? curX - COL_GAP : NODE_W
 
-  cfTunnels.forEach((tunnel, i) => {
-    const id = `cf-${tunnel.id}`
-    nodes.push({
-      id,
-      type: 'cfNode',
-      position: { x: cfAreaX, y: 110 + i * 150 },
-      data: { label: tunnel.name, status: tunnel.status, connections: tunnel.connections },
-      draggable: true,
-    })
-    edges.push({
-      id: `e-internet-${id}`,
-      source: 'internet',
-      target: id,
-      label: 'tunnel',
-      ...edgeStyle('#f97316', false, true),
-    })
-  })
+  // ── Proxmox nodes ─────────────────────────────────────────────────────────
 
-  // Proxmox nodes (centered over guests)
   for (const n of snap.nodes.data) {
+    const nodeGuests = guestCols.filter(gc => gc.nodeName === n.node)
+
+    // Center Proxmox over its guests
+    const spanStart = nodeGuests.length > 0 ? nodeGuests[0].colX : 0
+    const lastGC = nodeGuests[nodeGuests.length - 1]
+    const spanEnd = lastGC ? lastGC.colX + lastGC.colW : NODE_W
+    const pxX = (spanStart + spanEnd) / 2 - NODE_W / 2
+
     const pxId = `px-${n.node}`
     nodes.push({
       id: pxId,
       type: 'proxmoxNode',
-      position: { x: proxX, y: 110 },
+      position: { x: pxX, y: 0 },
       data: {
         label: n.node,
         cpu: n.cpu,
         ramPct: n.maxmem ? Math.round((n.mem / n.maxmem) * 100) : 0,
       },
-      draggable: true,
     })
 
-    const nodeGuests = allGuests.filter(g => g.nodeName === n.node)
-    nodeGuests.forEach(({ guest, guestType }, idx) => {
-      const gId = `guest-${guest.vmid}`
+    // ── LXC / VMs ───────────────────────────────────────────────────────────
+
+    for (const gc of nodeGuests) {
+      const gId = `guest-${gc.guest.vmid}`
+      // Center guest card within its column
+      const guestX = gc.colX + gc.colW / 2 - NODE_W / 2
       nodes.push({
         id: gId,
         type: 'guestNode',
-        position: { x: idx * STEP, y: 300 },
+        position: { x: guestX, y: 210 },
         data: {
-          label: guest.name,
-          vmid: guest.vmid,
-          status: guest.status,
-          cpu: guest.cpu,
-          ip: guest.ip,
-          guestType,
+          label: gc.guest.name,
+          vmid: gc.guest.vmid,
+          status: gc.guest.status,
+          cpu: gc.guest.cpu,
+          ip: gc.guest.ip,
+          guestType: gc.guestType,
         },
-        draggable: true,
       })
       edges.push({
         id: `e-${pxId}-${gId}`,
@@ -223,50 +229,43 @@ function buildGraph(snap: DashboardSnapshot): { nodes: Node[]; edges: Edge[] } {
         label: 'vmbr0',
         ...edgeStyle('#1d4ed8'),
       })
-    })
+    }
   }
 
-  // Docker hosts → containers
+  // ── Docker containers ──────────────────────────────────────────────────────
+
   let traefikNodeId: string | null = null
 
-  const activeHosts = snap.docker_hosts.data.filter(
-    (h: DockerHost) => h.available && h.containers.length > 0,
-  )
+  for (const gc of guestCols) {
+    const host = hostByVmid.get(gc.guest.vmid)
+    if (!host || !host.available || host.containers.length === 0) continue
 
-  for (const host of activeHosts) {
-    const parentId = host.proxmox_vmid ? `guest-${host.proxmox_vmid}` : null
-    const parentNode = nodes.find(n => n.id === parentId)
-    const baseX = parentNode ? parentNode.position.x : 0
-    const totalCW = host.containers.length * STEP - COL_GAP
-    const startX = baseX + COL_W / 2 - totalCW / 2
+    const parentId = `guest-${gc.guest.vmid}`
+    // Spread containers evenly across the column, centered
+    const totalContW = host.containers.length * STEP - COL_GAP
+    const contStartX = gc.colX + gc.colW / 2 - totalContW / 2
 
     host.containers.forEach((c, ci) => {
       const cId = `docker-${host.host_id}-${c.id}`
-
       if (!traefikNodeId && (c.name === 'traefik' || c.image.startsWith('traefik'))) {
         traefikNodeId = cId
       }
-
       nodes.push({
         id: cId,
         type: 'containerNode',
-        position: { x: startX + ci * STEP, y: 510 },
+        position: { x: contStartX + ci * STEP, y: 430 },
         data: { label: c.name, image: c.image, state: c.state },
-        draggable: true,
       })
-
-      if (parentId) {
-        edges.push({
-          id: `e-${parentId}-${cId}`,
-          source: parentId,
-          target: cId,
-          type: 'smoothstep',
-          ...edgeStyle('#22c55e', true),
-        })
-      }
+      edges.push({
+        id: `e-${parentId}-${cId}`,
+        source: parentId,
+        target: cId,
+        type: 'smoothstep',
+        ...edgeStyle('#22c55e', true),
+      })
     })
 
-    // Docker network edges (containers sharing a custom network)
+    // Same-network edges between containers
     const netMap = new Map<string, string[]>()
     for (const c of host.containers) {
       for (const net of c.networks) {
@@ -290,7 +289,37 @@ function buildGraph(snap: DashboardSnapshot): { nodes: Node[]; edges: Edge[] } {
     }
   }
 
-  // CF Tunnel → Traefik
+  // ── Cloudflare + Internet (right panel) ───────────────────────────────────
+
+  const cfX = totalGuestW + 120
+  nodes.push({
+    id: 'internet',
+    type: 'internetNode',
+    position: { x: cfX + 20, y: 0 },
+    data: {},
+  })
+
+  const cfTunnels: CloudflareTunnel[] = snap.cloudflare.available
+    ? (snap.cloudflare.data?.tunnels ?? [])
+    : []
+
+  cfTunnels.forEach((tunnel, i) => {
+    const id = `cf-${tunnel.id}`
+    nodes.push({
+      id,
+      type: 'cfNode',
+      position: { x: cfX, y: 110 + i * 160 },
+      data: { label: tunnel.name, status: tunnel.status, connections: tunnel.connections },
+    })
+    edges.push({
+      id: `e-internet-${id}`,
+      source: 'internet',
+      target: id,
+      label: 'tunnel',
+      ...edgeStyle('#f97316', false, true),
+    })
+  })
+
   if (traefikNodeId && cfTunnels.length > 0) {
     edges.push({
       id: 'e-cf-traefik',
@@ -344,10 +373,22 @@ export function TopologyMap() {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
 
+  // Persist manual drag positions across snapshot refreshes
+  const pinnedPositions = useRef(new Map<string, { x: number; y: number }>())
+
+  const onNodeDragStop = useCallback((_: React.MouseEvent, node: Node) => {
+    pinnedPositions.current.set(node.id, { x: node.position.x, y: node.position.y })
+  }, [])
+
   useEffect(() => {
     if (!snapshot) return
-    const { nodes: n, edges: e } = buildGraph(snapshot)
-    setNodes(n)
+    const { nodes: freshNodes, edges: e } = buildGraph(snapshot)
+    // Restore any manually dragged positions
+    const merged = freshNodes.map(n => ({
+      ...n,
+      position: pinnedPositions.current.get(n.id) ?? n.position,
+    }))
+    setNodes(merged)
     setEdges(e)
   }, [snapshot?.timestamp, setNodes, setEdges])
 
@@ -367,6 +408,7 @@ export function TopologyMap() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeDragStop={onNodeDragStop}
         nodeTypes={NODE_TYPES}
         fitView
         fitViewOptions={{ padding: 0.15 }}
