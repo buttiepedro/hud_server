@@ -4,6 +4,7 @@ from proxmoxer import ProxmoxAPI
 from app.config import settings
 from app.models.proxmox import NodeModel, LXCModel, VMModel, BridgeInfo
 from app.models.base import CollectorResult
+from app.collectors.discovery import extract_lxc_ip
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +41,13 @@ def _collect_sync() -> list[NodeModel]:
 
         try:
             for c in px.nodes(node_name).lxc.get():
+                ip = None
+                if c.get("status") == "running":
+                    try:
+                        cfg = px.nodes(node_name).lxc(c["vmid"]).config.get()
+                        ip = extract_lxc_ip(cfg)
+                    except Exception:
+                        pass
                 lxc_list.append(LXCModel(
                     vmid=int(c["vmid"]),
                     name=c.get("name", f"lxc-{c['vmid']}"),
@@ -52,6 +60,7 @@ def _collect_sync() -> list[NodeModel]:
                     maxdisk=c.get("maxdisk", 0),
                     uptime=c.get("uptime", 0),
                     tags=c.get("tags"),
+                    ip=ip,
                 ))
         except Exception as e:
             log.warning("Failed to fetch LXC for node %s: %s", node_name, e)
