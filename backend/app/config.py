@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     cloudflare_api_token: str | None = None
     cloudflare_account_id: str | None = None
     cloudflared_metrics_url: str | None = None
+    # Optional: show only this tunnel name (leave empty to show all active tunnels)
+    cloudflare_tunnel_name: str | None = None
 
     # NAT
     nat_ssh_host: str | None = None

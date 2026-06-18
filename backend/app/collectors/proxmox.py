@@ -67,6 +67,23 @@ def _collect_sync() -> list[NodeModel]:
 
         try:
             for v in px.nodes(node_name).qemu.get():
+                ip = None
+                if v.get("status") == "running":
+                    try:
+                        ifaces = px.nodes(node_name).qemu(v["vmid"]).agent("network-get-interfaces").get()
+                        for iface in (ifaces.get("result") or []):
+                            if iface.get("name") in ("lo",):
+                                continue
+                            for addr in (iface.get("ip-addresses") or []):
+                                if addr.get("ip-address-type") == "ipv4":
+                                    candidate = addr["ip-address"]
+                                    if not candidate.startswith("127.") and not candidate.startswith("169.254."):
+                                        ip = candidate
+                                        break
+                            if ip:
+                                break
+                    except Exception:
+                        pass
                 vm_list.append(VMModel(
                     vmid=int(v["vmid"]),
                     name=v.get("name", f"vm-{v['vmid']}"),
@@ -79,6 +96,7 @@ def _collect_sync() -> list[NodeModel]:
                     maxdisk=v.get("maxdisk", 0),
                     uptime=v.get("uptime", 0),
                     tags=v.get("tags"),
+                    ip=ip,
                 ))
         except Exception as e:
             log.warning("Failed to fetch VMs for node %s: %s", node_name, e)

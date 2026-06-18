@@ -15,11 +15,16 @@ async def _fetch_tunnels(client: httpx.AsyncClient) -> list[CloudflareTunnel]:
     resp = await client.get(url, params={"is_deleted": "false"})
     resp.raise_for_status()
     tunnels = []
+    filter_name = settings.cloudflare_tunnel_name
     for t in resp.json().get("result", []):
+        name = t.get("name", "")
+        # If a tunnel name filter is configured, skip non-matching tunnels
+        if filter_name and name != filter_name:
+            continue
         connections = len(t.get("connections", []))
         tunnels.append(CloudflareTunnel(
             id=t["id"],
-            name=t.get("name", ""),
+            name=name,
             status=t.get("status", "inactive"),
             created_at=t.get("created_at"),
             connections=connections,

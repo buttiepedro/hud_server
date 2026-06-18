@@ -148,12 +148,20 @@ function buildGraph(snap: DashboardSnapshot): { nodes: Node[]; edges: Edge[] } {
 
   type GuestEntry = { guest: LXCModel | VMModel; guestType: 'lxc' | 'vm'; nodeName: string }
 
-  // Build Docker host lookup
+  // Build Docker host lookup: by vmid (primary) and by IP (fallback for DOCKER_SSH_EXTRA_HOSTS)
   const hostByVmid = new Map<number, DockerHost>()
+  const hostByIp = new Map<string, DockerHost>()
   for (const h of snap.docker_hosts.data) {
-    if (h.available && h.proxmox_vmid != null) {
+    if (!h.available) continue
+    if (h.proxmox_vmid != null) {
       hostByVmid.set(h.proxmox_vmid, h)
+    } else {
+      hostByIp.set(h.ip, h)
     }
+  }
+
+  function findHost(guest: LXCModel | VMModel): DockerHost | undefined {
+    return hostByVmid.get(guest.vmid) ?? (guest.ip ? hostByIp.get(guest.ip) : undefined)
   }
 
   // Collect all guests in order
@@ -237,7 +245,7 @@ function buildGraph(snap: DashboardSnapshot): { nodes: Node[]; edges: Edge[] } {
   let traefikNodeId: string | null = null
 
   for (const gc of guestCols) {
-    const host = hostByVmid.get(gc.guest.vmid)
+    const host = findHost(gc.guest)
     if (!host || !host.available || host.containers.length === 0) continue
 
     const parentId = `guest-${gc.guest.vmid}`
