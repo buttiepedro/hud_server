@@ -5,6 +5,7 @@ services:
     env_file: .env
     volumes:
       - ./certs:/app/certs:ro
+      - ./data:/app/data
     networks:
       - hud-net
       - proxy

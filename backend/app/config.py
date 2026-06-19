@@ -1,15 +1,38 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+import json
+from pathlib import Path
+from typing import Any
+from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
+from pydantic.fields import FieldInfo
+
+CONFIG_PATH = Path("/app/data/config.json")
+
+
+class JsonFileConfigSource(PydanticBaseSettingsSource):
+    def get_field_value(self, _field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        data = self._read()
+        val = data.get(field_name)
+        return val, field_name, val is not None
+
+    def __call__(self) -> dict[str, Any]:
+        return self._read()
+
+    def _read(self) -> dict[str, Any]:
+        if CONFIG_PATH.exists():
+            try:
+                return json.loads(CONFIG_PATH.read_text())
+            except Exception:
+                pass
+        return {}
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Proxmox
-    proxmox_host: str
+    # Proxmox (required for operation, optional at startup for setup wizard)
+    proxmox_host: str = ""
     proxmox_user: str = "root@pam"
     proxmox_token_name: str = "hud"
-    proxmox_token_value: str
+    proxmox_token_value: str = ""
     proxmox_verify_ssl: bool = True
     proxmox_ca_cert: str | None = None
 
@@ -27,7 +50,6 @@ class Settings(BaseSettings):
     cloudflare_api_token: str | None = None
     cloudflare_account_id: str | None = None
     cloudflared_metrics_url: str | None = None
-    # Optional: show only this tunnel name (leave empty to show all active tunnels)
     cloudflare_tunnel_name: str | None = None
 
     # NAT
@@ -42,6 +64,22 @@ class Settings(BaseSettings):
     poll_interval_cloudflare: int = 120
     allowed_origins: str = "http://localhost:5173,http://localhost:3000"
     hud_api_token: str = "change_me"
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        secrets_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # JSON file takes priority over .env so the setup wizard can override it
+        return (init_settings, JsonFileConfigSource(settings_cls), env_settings, dotenv_settings, secrets_settings)
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.proxmox_host and self.proxmox_token_value)
 
     @property
     def allowed_origins_list(self) -> list[str]:

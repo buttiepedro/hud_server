@@ -25,3 +25,7 @@ frontend/dist/
 
 # Docker
 *.log
+
+# Runtime data (config written by setup wizard — contains credentials)
+data/*
+!data/.gitkeep

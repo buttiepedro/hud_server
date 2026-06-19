@@ -5,6 +5,7 @@ const nav = [
   { to: '/topology', label: '◈ Topology' },
   { to: '/containers', label: '⬡ Containers' },
   { to: '/connections', label: '⌁ Connections' },
+  { to: '/settings', label: '⚙ Settings' },
 ]
 
 export function Sidebar() {
