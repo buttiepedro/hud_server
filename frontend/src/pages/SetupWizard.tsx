@@ -66,6 +66,14 @@ function Label({ children }: { children: React.ReactNode }) {
   return <label className="block text-xs text-hud-muted mb-1 font-mono uppercase tracking-wider">{children}</label>
 }
 
+function Hint({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs text-hud-muted/70 mt-1 leading-relaxed">{children}</p>
+}
+
+function StepDesc({ children }: { children: React.ReactNode }) {
+  return <p className="text-sm text-hud-muted mb-5 leading-relaxed border-l-2 border-hud-border pl-3">{children}</p>
+}
+
 function Input({ className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
@@ -159,18 +167,25 @@ function StepProxmox({
 
   return (
     <div className="space-y-4">
+      <StepDesc>
+        Connect the HUD to your Proxmox server. The API token is used to read node status,
+        list LXC containers and VMs, and discover their IPs — no write permissions needed.
+      </StepDesc>
       <div>
         <Label>Proxmox Host / IP</Label>
         <Input value={config.proxmox_host} onChange={e => onChange({ proxmox_host: e.target.value })} placeholder="10.10.10.10" />
+        <Hint>IP address or hostname of your Proxmox node (without https://).</Hint>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>User</Label>
           <Input value={config.proxmox_user} onChange={e => onChange({ proxmox_user: e.target.value })} placeholder="root@pam" />
+          <Hint>Usually root@pam for local auth.</Hint>
         </div>
         <div>
           <Label>Token Name</Label>
           <Input value={config.proxmox_token_name} onChange={e => onChange({ proxmox_token_name: e.target.value })} placeholder="hud" />
+          <Hint>The ID you gave the token when creating it.</Hint>
         </div>
       </div>
       <div>
@@ -181,9 +196,11 @@ function StepProxmox({
           onChange={e => onChange({ proxmox_token_value: e.target.value })}
           placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
         />
-        <p className="text-xs text-hud-muted mt-1">
-          Datacenter → Permissions → API Tokens → Add (role: Administrator)
-        </p>
+        <Hint>
+          Create one at: Datacenter → Permissions → API Tokens → Add.
+          Assign role <strong className="text-hud-text">Administrator</strong> and uncheck "Privilege Separation".
+          The secret is only shown once — copy it here immediately.
+        </Hint>
       </div>
       <label className="flex items-center gap-2 text-sm text-hud-muted cursor-pointer">
         <input
@@ -193,6 +210,7 @@ function StepProxmox({
           className="accent-hud-blue"
         />
         Verify SSL certificate
+        <span className="text-xs">(disable if Proxmox uses a self-signed cert)</span>
       </label>
 
       <div className="flex items-center gap-3 pt-2">
@@ -273,6 +291,11 @@ function StepSSH({
 
   return (
     <div className="space-y-4">
+      <StepDesc>
+        The HUD connects to each LXC/VM via SSH to discover Docker containers running inside them.
+        Generate a dedicated SSH key here, then inject it automatically into the selected hosts.
+        If automatic injection fails (e.g. guest agent not installed), a copy-paste command is provided.
+      </StepDesc>
       <div className="flex items-center gap-3">
         <Btn onClick={generate} disabled={generating}>{generating ? 'Generating…' : pubKey ? '↺ Regenerate Key' : 'Generate SSH Key'}</Btn>
         {pubKey && <StatusBadge ok label="Key ready" />}
@@ -280,7 +303,7 @@ function StepSSH({
 
       {pubKey && (
         <div>
-          <Label>Public Key (copy this to authorize manually)</Label>
+          <Label>Public Key — copy this to authorize manually on any host</Label>
           <div className="relative">
             <pre className="text-xs font-mono bg-hud-bg border border-hud-border rounded p-3 break-all whitespace-pre-wrap text-hud-muted">{pubKey}</pre>
             <button
@@ -405,7 +428,10 @@ function StepIntegrations({
 }) {
   return (
     <div className="space-y-4">
-      <p className="text-xs text-hud-muted font-mono">All integrations are optional. Skip any you don't use.</p>
+      <StepDesc>
+        All integrations are optional — configure only what you have. Each one adds a panel
+        to the topology map and connections view.
+      </StepDesc>
 
       <IntegrationRow
         title="Traefik"
@@ -413,9 +439,15 @@ function StepIntegrations({
         testBody={{ traefik_api_url: config.traefik_api_url, traefik_api_user: config.traefik_api_user, traefik_api_password: config.traefik_api_password }}
         token={token}
       >
+        <p className="text-xs text-hud-muted/70 leading-relaxed">
+          Shows active routers and which containers are exposed. Requires Traefik to have
+          <code className="text-hud-text bg-hud-bg px-1 rounded mx-0.5">--api.insecure=true</code>
+          and the HUD container on the same Docker network.
+        </p>
         <div>
           <Label>API URL</Label>
           <Input value={config.traefik_api_url} onChange={e => onChange({ traefik_api_url: e.target.value })} placeholder="http://traefik:8080" />
+          <Hint>Internal URL to Traefik's dashboard API (port 8080 by default).</Hint>
         </div>
       </IntegrationRow>
 
@@ -425,6 +457,11 @@ function StepIntegrations({
         testBody={{ cloudflare_api_token: config.cloudflare_api_token, cloudflare_account_id: config.cloudflare_account_id }}
         token={token}
       >
+        <p className="text-xs text-hud-muted/70 leading-relaxed">
+          Shows tunnel status and which hostnames are routed through Cloudflare.
+          Create a scoped API token at dash.cloudflare.com → My Profile → API Tokens
+          with permission <strong className="text-hud-text">Account &gt; Cloudflare Tunnel &gt; Read</strong>.
+        </p>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>API Token</Label>
@@ -433,30 +470,38 @@ function StepIntegrations({
           <div>
             <Label>Account ID</Label>
             <Input value={config.cloudflare_account_id} onChange={e => onChange({ cloudflare_account_id: e.target.value })} placeholder="Account ID" />
+            <Hint>Found in the Cloudflare dashboard sidebar under your domain.</Hint>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label>Tunnel Name (filter)</Label>
+            <Label>Tunnel Name Filter</Label>
             <Input value={config.cloudflare_tunnel_name} onChange={e => onChange({ cloudflare_tunnel_name: e.target.value })} placeholder="traefik" />
+            <Hint>If your CF account has tunnels from multiple servers, enter the name of the one pointing to this server to filter out the rest.</Hint>
           </div>
           <div>
             <Label>Cloudflared Metrics URL</Label>
             <Input value={config.cloudflared_metrics_url} onChange={e => onChange({ cloudflared_metrics_url: e.target.value })} placeholder="http://cloudflared:20241" />
+            <Hint>Internal URL to cloudflared's Prometheus metrics endpoint. Shows active stream count.</Hint>
           </div>
         </div>
       </IntegrationRow>
 
       <IntegrationRow
-        title="NAT (SSH to Proxmox host)"
+        title="NAT Rules (SSH to Proxmox host)"
         testType="nat"
         testBody={{ nat_ssh_host: config.nat_ssh_host, nat_ssh_user: config.nat_ssh_user }}
         token={token}
       >
+        <p className="text-xs text-hud-muted/70 leading-relaxed">
+          SSHes into the Proxmox host and reads iptables/nftables NAT rules. Useful to visualize
+          port forwarding and DNAT rules. The SSH key injected in the previous step is used.
+        </p>
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-2">
             <Label>SSH Host</Label>
             <Input value={config.nat_ssh_host} onChange={e => onChange({ nat_ssh_host: e.target.value })} placeholder="10.10.10.10" />
+            <Hint>IP or hostname of the Proxmox node (same machine you entered in step 1).</Hint>
           </div>
           <div>
             <Label>SSH User</Label>
@@ -466,8 +511,12 @@ function StepIntegrations({
       </IntegrationRow>
 
       <div>
-        <Label>Extra Docker SSH Hosts (comma-separated IPs)</Label>
+        <Label>Extra Docker SSH Hosts</Label>
         <Input value={config.docker_ssh_extra_hosts} onChange={e => onChange({ docker_ssh_extra_hosts: e.target.value })} placeholder="10.10.10.30,10.10.10.40" />
+        <Hint>
+          Comma-separated IPs of additional machines running Docker that weren't auto-discovered from Proxmox
+          (e.g. bare-metal hosts or machines outside this Proxmox cluster).
+        </Hint>
       </div>
 
       <div className="flex justify-between pt-2">
@@ -490,6 +539,10 @@ function StepToken({
 }) {
   return (
     <div className="space-y-4">
+      <StepDesc>
+        Set a secret token to protect the dashboard. Anyone who accesses the HUD URL
+        will need to enter this token. It's automatically saved in your browser after login.
+      </StepDesc>
       <div>
         <Label>HUD API Token</Label>
         <div className="flex gap-2">
@@ -502,16 +555,24 @@ function StepToken({
           />
           <Btn onClick={() => onChange({ hud_api_token: randomToken() })}>Generate</Btn>
         </div>
-        <p className="text-xs text-hud-muted mt-1">This token is required to access the dashboard. Keep it secret.</p>
+        <Hint>
+          A random 48-character token is pre-generated. Click Generate to get a new one,
+          or type your own. Keep this secret — it's the only thing protecting the dashboard.
+        </Hint>
       </div>
 
       <div>
-        <Label>Allowed Origins (comma-separated)</Label>
+        <Label>Allowed Origins</Label>
         <Input
           value={config.allowed_origins}
           onChange={e => onChange({ allowed_origins: e.target.value })}
           placeholder="http://10.10.10.10:3000,https://hud.yourdomain.com"
         />
+        <Hint>
+          Comma-separated list of URLs from which the browser can access the API (CORS).
+          Include your local IP port and your public domain if you expose the HUD via Traefik/Cloudflare.
+          Example: <code className="text-hud-text bg-hud-bg px-1 rounded">http://10.10.10.10:3000,https://hud.example.com</code>
+        </Hint>
       </div>
 
       <div className="flex justify-between pt-2">
