@@ -28,6 +28,7 @@ services:
       - proxy
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
       - "traefik.http.routers.hud.rule=Host(`${HUD_DOMAIN}`)"
       - "traefik.http.routers.hud.entrypoints=${TRAEFIK_ENTRYPOINT:-web}"
       - "traefik.http.services.hud.loadbalancer.server.port=80"
