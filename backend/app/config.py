@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any  # noqa: F401 — used in settings_customise_sources signature
 from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
 from pydantic.fields import FieldInfo
 
@@ -69,14 +69,16 @@ class Settings(BaseSettings):
     def settings_customise_sources(
         cls,
         settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        secrets_settings: PydanticBaseSettingsSource,
-        **_kwargs: PydanticBaseSettingsSource,
+        init_settings: PydanticBaseSettingsSource | None = None,
+        env_settings: PydanticBaseSettingsSource | None = None,
+        dotenv_settings: PydanticBaseSettingsSource | None = None,
+        secrets_settings: PydanticBaseSettingsSource | None = None,
+        **_kwargs: Any,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # JSON file takes priority over .env so the setup wizard can override it
-        return (init_settings, JsonFileConfigSource(settings_cls), env_settings, dotenv_settings, secrets_settings)
+        # JSON file takes priority over .env so the setup wizard can override it.
+        # Optional defaults handle pydantic-settings signature changes across versions.
+        sources = (init_settings, JsonFileConfigSource(settings_cls), env_settings, dotenv_settings, secrets_settings)
+        return tuple(s for s in sources if s is not None)
 
     @property
     def is_configured(self) -> bool:
