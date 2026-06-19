@@ -73,6 +73,7 @@ class Settings(BaseSettings):
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,
         secrets_settings: PydanticBaseSettingsSource,
+        **_kwargs: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         # JSON file takes priority over .env so the setup wizard can override it
         return (init_settings, JsonFileConfigSource(settings_cls), env_settings, dotenv_settings, secrets_settings)
