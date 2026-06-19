@@ -29,8 +29,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.hud.rule=Host(`${HUD_DOMAIN}`)"
-      - "traefik.http.routers.hud.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
-      - "traefik.http.routers.hud.tls=true"
+      - "traefik.http.routers.hud.entrypoints=${TRAEFIK_ENTRYPOINT:-web}"
       - "traefik.http.services.hud.loadbalancer.server.port=80"
       - "traefik.http.middlewares.hud-sse.headers.customResponseHeaders.X-Accel-Buffering=no"
       - "traefik.http.routers.hud.middlewares=hud-sse"
