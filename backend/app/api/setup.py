@@ -17,9 +17,9 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/setup", tags=["setup"])
 
-CERTS_DIR = Path("/app/certs")
-KEY_PATH = CERTS_DIR / "id_ed25519"
-PUB_PATH = CERTS_DIR / "id_ed25519.pub"
+DATA_DIR = Path("/app/data")
+KEY_PATH = DATA_DIR / "id_ed25519"
+PUB_PATH = DATA_DIR / "id_ed25519.pub"
 
 
 # ── Models ──────────────────────────────────────────────────────────────────
@@ -78,6 +78,7 @@ class SaveConfigRequest(BaseModel):
     proxmox_token_name: str = "hud"
     proxmox_token_value: str
     proxmox_verify_ssl: bool = False
+    docker_ssh_key_path: str = "/app/data/id_ed25519"
     docker_ssh_extra_hosts: str = ""
     traefik_api_url: str | None = None
     traefik_api_user: str | None = None
@@ -88,6 +89,7 @@ class SaveConfigRequest(BaseModel):
     cloudflared_metrics_url: str | None = None
     nat_ssh_host: str | None = None
     nat_ssh_user: str = "root"
+    nat_ssh_key_path: str = "/app/data/id_ed25519"
     hud_api_token: str
     allowed_origins: str = "http://localhost:3000"
 
@@ -204,7 +206,7 @@ async def get_ssh_key():
 
 @router.post("/generate-ssh-key")
 async def generate_ssh_key():
-    CERTS_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     if KEY_PATH.exists():
         KEY_PATH.unlink()
     if PUB_PATH.exists():
